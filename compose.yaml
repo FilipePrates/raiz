@@ -1,0 +1,40 @@
+name: raiz-local
+services:
+  postgres:
+    image: postgres:17.11-alpine
+    env_file: ./infra/secrets/local.env
+    environment:
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse -d synapse"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  synapse:
+    image: ghcr.io/element-hq/synapse:v1.162.0
+    # Local development only. Production needs a fixed public domain and HTTPS.
+    user: "0:0"
+    ports:
+      - "127.0.0.1:8008:8008"
+    volumes:
+      - ./infra/data/synapse:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8008/health', timeout=5)",
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    restart: unless-stopped
+volumes:
+  postgres-data:
